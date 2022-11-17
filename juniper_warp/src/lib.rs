@@ -172,7 +172,7 @@ where
 pub fn make_graphql_filter<Query, Mutation, Context, S>(
     schema: juniper::RootNode<'static, Query, Mutation, S>,
     context_extractor: BoxedFilter<(Context,)>,
-) -> BoxedFilter<(warp::http::Response<Vec<u8>>,)>
+) -> BoxedFilter<(warp::http::Response<String>,)>
 where
     S: ScalarValue + Send + Sync + 'static,
     for<'b> &'b S: ScalarRefValue<'b>,
@@ -190,7 +190,7 @@ where
                 poll_fn(move || {
                     tokio_threadpool::blocking(|| {
                         let response = request.execute(&schema, &context);
-                        Ok((serde_json::to_vec(&response)?, response.is_ok()))
+                        Ok((serde_json::to_string(&response)?, response.is_ok()))
                     })
                 })
                 .and_then(|result| ::futures::future::done(Ok(build_response(result))))
@@ -224,7 +224,7 @@ where
                     );
 
                     let response = graphql_request.execute(&schema, &context);
-                    Ok((serde_json::to_vec(&response)?, response.is_ok()))
+                    Ok((serde_json::to_string(&response)?, response.is_ok()))
                 })
             })
             .and_then(|result| ::futures::future::done(Ok(build_response(result))))
@@ -241,8 +241,8 @@ where
 }
 
 fn build_response(
-    response: Result<(Vec<u8>, bool), failure::Error>,
-) -> warp::http::Response<Vec<u8>> {
+    response: Result<(String, bool), failure::Error>,
+) -> warp::http::Response<String> {
     match response {
         Ok((body, is_ok)) => warp::http::Response::builder()
             .status(if is_ok { 200 } else { 400 })
@@ -251,13 +251,14 @@ fn build_response(
             .expect("response is valid"),
         Err(_) => warp::http::Response::builder()
             .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Vec::new())
+            // .body(Vec::new())
+            .body("".to_string())
             .expect("status code is valid"),
     }
 }
 
 type Response =
-    Box<dyn Future<Item = warp::http::Response<Vec<u8>>, Error = warp::reject::Rejection> + Send>;
+    Box<dyn Future<Item = warp::http::Response<String>, Error = warp::reject::Rejection> + Send>;
 
 /// Create a filter that replies with an HTML page containing GraphiQL. This does not handle routing, so you can mount it on any endpoint.
 ///
